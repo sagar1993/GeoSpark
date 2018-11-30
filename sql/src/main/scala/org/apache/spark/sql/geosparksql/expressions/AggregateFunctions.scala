@@ -30,7 +30,10 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
 import org.apache.spark.sql.geosparksql.UDT.GeometryUDT
 import org.apache.spark.sql.types.{DataType, StructField, StructType}
-import org.opensphere.*
+import org.apache.spark.sql.types._
+import org.opensphere.geometry.algorithm.ConcaveHull
+
+
 
 /**
   * Return the polygon union of all Polygon in the given column
@@ -196,7 +199,7 @@ class ST_ConcaveHull_Aggr extends UserDefinedAggregateFunction {
   // This is the internal fields you keep for computing your aggregate.
   override def bufferSchema: StructType = StructType(
     StructField("ConcaveHull", new GeometryUDT)::
-    StructField("flag", Boolean) :: Nil
+    StructField("flag", BooleanType,false) :: Nil
   )
 
   // This is the output type of your aggregatation function.
@@ -214,7 +217,6 @@ class ST_ConcaveHull_Aggr extends UserDefinedAggregateFunction {
     coordinates(4) = new Coordinate(-999999999, -999999999)
     val geometryFactory = new GeometryFactory()
     buffer(0) = geometryFactory.createPolygon(coordinates)
-    buffer(1)= false
     //buffer(0) = new GenericArrayData(GeometrySerializer.serialize(geometryFactory.createPolygon(coordinates)))
   }
 
@@ -225,16 +227,16 @@ class ST_ConcaveHull_Aggr extends UserDefinedAggregateFunction {
 
     val runningGeometry = buffer.getAs[Geometry](0)
     val incomingGeometry = input.getAs[Geometry](0)
-    if(buffer.getAs[Boolean][1]==false)
-    { runningGeometry = incomingGeometry
-      buffer(0) = newGeometry.concaveHull()
+    if(buffer.getAs[Boolean](1)==false)
+    { //runningGeometry = incomingGeometry
+      buffer(0) = new ConcaveHull(incomingGeometry,threshold)
       buffer(1)= true
     }
     else {
       val totalcoordinates =  runningGeometry.getCoordinates ++ incomingGeometry.getCoordinates
       val geometryFactory = new GeometryFactory()
       val temppolygon = geometryFactory.createPolygon(totalcoordinates)
-      ConcaveHull ch = new ConcaveHull(temppolygon, threshold);
+      val ch = new ConcaveHull(temppolygon, threshold);
       buffer(0) = ch
     }
     
@@ -242,16 +244,17 @@ class ST_ConcaveHull_Aggr extends UserDefinedAggregateFunction {
 
   // This is how to merge two objects with the bufferSchema type.
   override def merge(buffer1: MutableAggregationBuffer, buffer2: Row): Unit = {
-    
+
+    val threshold = 4.0    
     val leftgeometry = buffer1.getAs[Geometry](0)
     val rightgeometry = buffer2.getAs[Geometry](0)
 
     val leftcoordinates = leftgeometry.getCoordinates()
     val rightcoordinates = rightgeometry.getCoordinates()
     val totalcoordinates = leftcoordinates ++ rightcoordinates
-    
     val geometryFactory = new GeometryFactory()
-    ConcaveHull chmerged = new ConcaveHull(temppolygon, threshold);
+    val temppolygon = geometryFactory.createPolygon(totalcoordinates)
+    val chmerged = new ConcaveHull(temppolygon, threshold);
     buffer1(0) = chmerged
   }
 

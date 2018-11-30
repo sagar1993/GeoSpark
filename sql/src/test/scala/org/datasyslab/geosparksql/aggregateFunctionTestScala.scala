@@ -27,6 +27,8 @@
 package org.datasyslab.geosparksql
 
 import com.vividsolutions.jts.geom.{Coordinate, Geometry, GeometryFactory}
+import org.opensphere.geometry.algorithm.ConcaveHull
+
 
 class aggregateFunctionTestScala extends TestBaseScala {
 
@@ -59,6 +61,18 @@ class aggregateFunctionTestScala extends TestBaseScala {
       polygonDf.show()
       var union = sparkSession.sql("select ST_Union_Aggr(polygondf.polygonshape) from polygondf")
       assert(union.take(1)(0).get(0).asInstanceOf[Geometry].getArea == 10100)
+    }
+
+    it("Passed ST_Concave_aggr") {
+
+      var polygonCsvDf = sparkSession.read.format("csv").option("delimiter", ",").option("header", "false").load(unionPolygonInputLocation)
+      polygonCsvDf.createOrReplaceTempView("polygontable")
+      polygonCsvDf.show()
+      var polygonDf = sparkSession.sql("select ST_PolygonFromEnvelope(cast(polygontable._c0 as Decimal(24,20)),cast(polygontable._c1 as Decimal(24,20)), cast(polygontable._c2 as Decimal(24,20)), cast(polygontable._c3 as Decimal(24,20))) as polygonshape from polygontable")
+      polygonDf.createOrReplaceTempView("polygondf")
+      polygonDf.show()
+      var concavehull = sparkSession.sql("select ST_ConcaveHull_Aggr(polygondf.polygonshape) from polygondf")
+      assert(concavehull.take(1)(0).get(0).asInstanceOf[Geometry] == 10100)
     }
   }
 }
