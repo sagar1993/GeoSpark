@@ -30,6 +30,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
 import org.apache.spark.sql.geosparksql.UDT.GeometryUDT
 import org.apache.spark.sql.types.{DataType, StructField, StructType}
+import org.opensphere.*
 
 /**
   * Return the polygon union of all Polygon in the given column
@@ -175,6 +176,83 @@ class ST_Envelope_Aggr extends UserDefinedAggregateFunction {
     coordinates(4) = coordinates(0)
     val geometryFactory = new GeometryFactory()
     buffer1(0) = geometryFactory.createPolygon(coordinates)
+  }
+
+  // This is where you output the final value, given the final value of your bufferSchema.
+  override def evaluate(buffer: Row): Any = {
+    return buffer.getAs[Geometry](0)
+  }
+}
+
+/**
+  * Return the Concave Hull Geometry of the entire column
+  */
+
+class ST_ConcaveHull_Aggr extends UserDefinedAggregateFunction {
+  // This is the input fields for your aggregate function.
+  override def inputSchema: org.apache.spark.sql.types.StructType =
+    StructType(StructField("ConcaveHull", new GeometryUDT) :: Nil)
+
+  // This is the internal fields you keep for computing your aggregate.
+  override def bufferSchema: StructType = StructType(
+    StructField("ConcaveHull", new GeometryUDT)::
+    StructField("flag", Boolean) :: Nil
+  )
+
+  // This is the output type of your aggregatation function.
+  override def dataType: DataType = new GeometryUDT
+
+  override def deterministic: Boolean = true
+
+  // This is the initial value for your buffer schema.
+  override def initialize(buffer: MutableAggregationBuffer): Unit = {
+    val coordinates: Array[Coordinate] = new Array[Coordinate](5)
+    coordinates(0) = new Coordinate(-999999999, -999999999)
+    coordinates(1) = new Coordinate(-999999999, -999999999)
+    coordinates(2) = new Coordinate(-999999999, -999999999)
+    coordinates(3) = new Coordinate(-999999999, -999999999)
+    coordinates(4) = new Coordinate(-999999999, -999999999)
+    val geometryFactory = new GeometryFactory()
+    buffer(0) = geometryFactory.createPolygon(coordinates)
+    buffer(1)= false
+    //buffer(0) = new GenericArrayData(GeometrySerializer.serialize(geometryFactory.createPolygon(coordinates)))
+  }
+
+  // This is how to update your buffer schema given an input.
+  override def update(buffer: MutableAggregationBuffer, input: Row): Unit = {
+
+    val threshold = 4.0
+
+    val runningGeometry = buffer.getAs[Geometry](0)
+    val incomingGeometry = input.getAs[Geometry](0)
+    if(buffer.getAs[Boolean][1]==false)
+    { runningGeometry = incomingGeometry
+      buffer(0) = newGeometry.concaveHull()
+      buffer(1)= true
+    }
+    else {
+      val totalcoordinates =  runningGeometry.getCoordinates ++ incomingGeometry.getCoordinates
+      val geometryFactory = new GeometryFactory()
+      val temppolygon = geometryFactory.createPolygon(totalcoordinates)
+      ConcaveHull ch = new ConcaveHull(temppolygon, threshold);
+      buffer(0) = ch
+    }
+    
+  }
+
+  // This is how to merge two objects with the bufferSchema type.
+  override def merge(buffer1: MutableAggregationBuffer, buffer2: Row): Unit = {
+    
+    val leftgeometry = buffer1.getAs[Geometry](0)
+    val rightgeometry = buffer2.getAs[Geometry](0)
+
+    val leftcoordinates = leftgeometry.getCoordinates()
+    val rightcoordinates = rightgeometry.getCoordinates()
+    val totalcoordinates = leftcoordinates ++ rightcoordinates
+    
+    val geometryFactory = new GeometryFactory()
+    ConcaveHull chmerged = new ConcaveHull(temppolygon, threshold);
+    buffer1(0) = chmerged
   }
 
   // This is where you output the final value, given the final value of your bufferSchema.
