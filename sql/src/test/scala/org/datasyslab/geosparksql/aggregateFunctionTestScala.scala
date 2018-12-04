@@ -74,5 +74,61 @@ class aggregateFunctionTestScala extends TestBaseScala {
       var concavehull = sparkSession.sql("select ST_ConcaveHull_Aggr(polygondf.polygonshape) from polygondf")
       assert(concavehull.take(1)(0).get(0).asInstanceOf[Geometry] == 10100)
     }
+    
+    it("Passed ST_Concave_aggr return test") {
+
+      var polygonCsvDf = sparkSession.read.format("csv").option("delimiter", ",").option("header", "false").load(unionPolygonInputLocation)
+      polygonCsvDf.createOrReplaceTempView("polygontable")
+      polygonCsvDf.show()
+      var polygonDf = sparkSession.sql("select ST_PolygonFromEnvelope(cast(polygontable._c0 as Decimal(24,20)),cast(polygontable._c1 as Decimal(24,20)), cast(polygontable._c2 as Decimal(24,20)), cast(polygontable._c3 as Decimal(24,20))) as polygonshape from polygontable")
+      polygonDf.createOrReplaceTempView("polygondf")
+      polygonDf.show()
+      var concavehull = sparkSession.sql("select ST_ConcaveHull_Aggr(polygondf.polygonshape) from polygondf")
+      assert(concavehull.count() == 1)
+    }
+    
+    it("Passed ST_Concave_aggr test target percent 1") {
+
+      var polygonCsvDf = sparkSession.read.format("csv").option("delimiter", ",").option("header", "false").load(unionPolygonInputLocation)
+      polygonCsvDf.createOrReplaceTempView("polygontable")
+      polygonCsvDf.show()
+      var polygonDf = sparkSession.sql("select ST_PolygonFromEnvelope(cast(polygontable._c0 as Decimal(24,20)),cast(polygontable._c1 as Decimal(24,20)), cast(polygontable._c2 as Decimal(24,20)), cast(polygontable._c3 as Decimal(24,20))) as polygonshape from polygontable")
+      polygonDf.createOrReplaceTempView("polygondf")
+      polygonDf.show()
+      var concavehull = sparkSession.sql("select ST_ConcaveHull_Aggr(polygondf.polygonshape,1) from polygondf")
+      var convexhull = sparkSession.sql("select ST_ConvexHull_Aggr(polygondf.polygonshape) from polygondf")
+      assert(concavehull.take(1)(0).get(0) == convexhull.take(1)(0).get(0))
+    }
+    
+    it("Passed ST_Concave_aggr test target percent not 1") {
+
+      var polygonCsvDf = sparkSession.read.format("csv").option("delimiter", ",").option("header", "false").load(unionPolygonInputLocation)
+      polygonCsvDf.createOrReplaceTempView("polygontable")
+      polygonCsvDf.show()
+      var polygonDf = sparkSession.sql("select ST_PolygonFromEnvelope(cast(polygontable._c0 as Decimal(24,20)),cast(polygontable._c1 as Decimal(24,20)), cast(polygontable._c2 as Decimal(24,20)), cast(polygontable._c3 as Decimal(24,20))) as polygonshape from polygontable")
+      polygonDf.createOrReplaceTempView("polygondf")
+      polygonDf.show()
+      var concavehull = sparkSession.sql("select ST_ConcaveHull_Aggr(polygondf.polygonshape,1) from polygondf")
+      var convexhull = sparkSession.sql("select ST_ConvexHull_Aggr(polygondf.polygonshape) from polygondf")
+      assert(concavehull.take(1)(0).get(0) != convexhull.take(1)(0).get(0))
+    }
+    
+    it("Passed ST_Concave_aggr test target percent not 1") {
+
+      var polygonCsvDf = sparkSession.read.format("csv").option("delimiter", ",").option("header", "false").load(unionPolygonInputLocation)
+      polygonCsvDf.createOrReplaceTempView("polygontable")
+      polygonCsvDf.show()
+      var polygonDf = sparkSession.sql("select ST_PolygonFromEnvelope(cast(polygontable._c0 as Decimal(24,20)),cast(polygontable._c1 as Decimal(24,20)), cast(polygontable._c2 as Decimal(24,20)), cast(polygontable._c3 as Decimal(24,20))) as polygonshape from polygontable")
+      polygonDf.createOrReplaceTempView("polygondf")
+      polygonDf.show()
+      var concavehull = sparkSession.sql("select ST_ConcaveHull_Aggr(polygondf.polygonshape,1) from polygondf")
+      var convexhull = sparkSession.sql("select ST_ConvexHull_Aggr(polygondf.polygonshape) from polygondf")
+      assert(concavehull.take(1)(0).get(0) != convexhull.take(1)(0).get(0))
+    }
+    
+    it("Passed ST_ConvcaveHull output test") {
+      var functionDf = sparkSession.sql("SELECT ST_AsText(ST_ConvexHull(ST_Union(ST_GeomFromText('MULTILINESTRING((100 190,10 8),(150 10, 20 30))'),ST_GeomFromText('MULTIPOINT(50 5, 150 30, 50 10, 10 10)'))), 1)")
+      assert(functionDf.take(1)(0).get(0).asInstanceOf[Geometry].toText.equals("POLYGON((50 5,10 8,10 10,100 190,150 30,150 10,50 5))")
+    }
   }
 }
